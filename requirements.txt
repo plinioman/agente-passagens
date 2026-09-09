@@ -1,0 +1,4 @@
+fast-flights>=2.2,<3
+playwright>=1.44
+requests>=2.31
+PyYAML>=6.0

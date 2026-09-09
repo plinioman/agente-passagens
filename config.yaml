@@ -1,0 +1,70 @@
+# ---------------------------------------------------------------------------
+# Configuracao do agente de monitoramento de passagens
+# Tudo aqui e publico (nao ha segredos). Segredos ficam em GitHub Secrets:
+#   TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, SMTP_PASSWORD
+# ---------------------------------------------------------------------------
+
+# Rotas monitoradas: origem fixa CNF, varios destinos aceitos
+rotas:
+  - origem: CNF
+    destino: JFK
+  - origem: CNF
+    destino: EWR
+  - origem: CNF
+    destino: LGA
+  - origem: CNF
+    destino: YYZ
+
+# Janelas de viagem (datas totalmente flexiveis dentro de cada mes)
+periodos:
+  - { ano: 2027, mes: 3 }   # marco
+  - { ano: 2027, mes: 4 }   # abril
+  - { ano: 2027, mes: 5 }   # maio
+  - { ano: 2027, mes: 6 }   # junho
+  - { ano: 2027, mes: 9 }   # setembro
+
+viagem:
+  dias_min: 8
+  dias_max: 12
+  passageiros_adultos: 3
+  passageiros_criancas: 3
+  classe: economy
+  max_paradas: 2
+
+precos:
+  # Alvo por pessoa (o usuario confirmou: preco de adulto e crianca nao variam)
+  alvo_por_pessoa_brl: 4000
+  # Alerta por queda percentual em relacao a media movel observada
+  queda_percentual: 0.18
+  # So dispara alerta de queda depois de acumular este tanto de historico
+  dias_minimos_historico: 7
+  # Janela da media movel
+  media_movel_dias: 45
+
+# Estrategia de varredura rotativa: cada execucao horaria cobre 1 "unidade"
+# (uma rota x um periodo). Com 4 rotas x 5 periodos = 20 unidades, o ciclo
+# completo leva ~20 horas. Isso mantem cada execucao leve e gentil com a fonte.
+varredura:
+  passo_dias_ida: 6          # amostra datas de ida a cada N dias dentro do mes
+  amostras_volta: 2         # quantas duracoes testar entre dias_min e dias_max
+  max_consultas_por_run: 8  # cada consulta abre um navegador (Playwright): ~15-30s
+  pausa_entre_consultas_seg: 2
+
+relatorio:
+  # Horarios apenas informativos; o agendamento real esta em .github/workflows/report.yml
+  # (11:00 e 18:00 UTC = 08:00 e 15:00 no horario de Brasilia)
+  top_n: 10
+
+email:
+  ativo: true
+  remetente: plinioo@gmail.com
+  destinatario: plinioo@gmail.com
+  smtp_host: smtp.gmail.com
+  smtp_port: 587
+
+moeda:
+  # Cotacoes de fallback caso a API de cambio falhe (atualizar de vez em quando)
+  fallback:
+    USD: 5.40
+    CAD: 3.90
+    EUR: 5.80

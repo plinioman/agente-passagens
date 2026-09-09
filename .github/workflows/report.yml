@@ -1,0 +1,47 @@
+name: report
+
+on:
+  schedule:
+    - cron: "0 11 * * *"       # 08:00 no horario de Brasilia (UTC-3)
+    - cron: "0 18 * * *"       # 15:00 no horario de Brasilia (UTC-3)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: agente-passagens
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Relatorio
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        run: python -m src.report
+
+      - name: Commitar snapshot
+        run: |
+          git config user.name "agente-passagens-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --staged --quiet; then
+            echo "sem mudancas"
+          else
+            git commit -m "dados: snapshot relatorio $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push
+          fi
