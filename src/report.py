@@ -16,8 +16,15 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname
 log = logging.getLogger("report")
 
 
+FUSO_BRT = timezone(timedelta(hours=-3))  # Brasil nao tem horario de verao desde 2019
+
+
 def _ts(l: dict) -> datetime:
     return datetime.strptime(l["timestamp_utc"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+
+
+def _agora_brt_str() -> str:
+    return datetime.now(FUSO_BRT).strftime("%d/%m/%Y %H:%M (GMT-3)")
 
 
 def melhores_por_rota_data(historico: list[dict], desde_horas: int = 24) -> list[dict]:
@@ -88,7 +95,7 @@ def main() -> None:
     snap_ant = (estado.get("snapshot_relatorio") or {}).get("itens", {})
     hist_dias = analysis.dias_de_historico(historico)
 
-    linhas = [f"<b>📊 Relatorio de passagens</b> — {agora_utc()}", ""]
+    linhas = [f"<b>📊 Relatorio de passagens</b> — {_agora_brt_str()}", ""]
     linhas.extend(_cabecalho_criterios(cfg))
     linhas.append(f"• Historico acumulado: {hist_dias:.1f} dias")
     linhas.append("")
@@ -125,7 +132,7 @@ def main() -> None:
     texto_email = texto
     for tag in ("<b>", "</b>", "<i>", "</i>"):
         texto_email = texto_email.replace(tag, "")
-    notify.email(f"[Passagens] Relatorio {datetime.now(timezone.utc):%d/%m %H:%MZ}",
+    notify.email(f"[Passagens] Relatorio {datetime.now(FUSO_BRT):%d/%m %H:%M} (GMT-3)",
                  "<pre>" + texto_email + "</pre>", cfg["email"])
 
     estado["snapshot_relatorio"] = {"em": agora_utc(), "itens": novo_snap}
