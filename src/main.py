@@ -1,15 +1,14 @@
-"""Execucao horaria: varre uma fatia rotativa de datas, grava historico e
-dispara alertas quando (a) preco/pessoa < alvo ou (b) queda % sobre a media.
+"""Execucao horaria: consulta a(s) busca(s) configuradas (rota + datas fixas),
+grava historico e dispara alertas quando (a) preco/pessoa < alvo ou (b) queda
+% sobre a media (esta ultima so depois que houver historico suficiente).
 
 Rodar: python -m src.main
 """
 from __future__ import annotations
 
-import calendar
 import logging
 import random
 import time
-from datetime import date, timedelta
 
 from . import analysis, flights, fx, notify
 from .config import carregar
@@ -19,57 +18,25 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname
 log = logging.getLogger("main")
 
 
-def unidades(cfg: dict) -> list[tuple[dict, dict]]:
-    """Todas as combinacoes (rota, periodo), em ordem estavel."""
-    return [(r, p) for p in cfg["periodos"] for r in cfg["rotas"]]
-
-
-def combinacoes_datas(periodo: dict, cfg_viagem: dict, cfg_varre: dict) -> list[tuple[str, str, int]]:
-    ano, mes = periodo["ano"], periodo["mes"]
-    _, ndias = calendar.monthrange(ano, mes)
-    dmin, dmax = cfg_viagem["dias_min"], cfg_viagem["dias_max"]
-    n_volta = max(1, int(cfg_varre["amostras_volta"]))
-    if n_volta == 1:
-        duracoes = [(dmin + dmax) // 2]
-    else:
-        passo = (dmax - dmin) / (n_volta - 1)
-        duracoes = sorted({int(round(dmin + i * passo)) for i in range(n_volta)})
-
-    combos: list[tuple[str, str, int]] = []
-    for dia in range(1, ndias + 1, int(cfg_varre["passo_dias_ida"])):
-        ida = date(ano, mes, dia)
-        for dur in duracoes:
-            volta = ida + timedelta(days=dur)
-            combos.append((ida.isoformat(), volta.isoformat(), dur))
-    return combos
-
-
 def main() -> None:
     cfg = carregar()
     estado = carregar_estado()
     historico = ler_historico()
     taxas = fx.cotacoes(cfg["moeda"]["fallback"])
-
-    lista = unidades(cfg)
-    cursor = int(estado.get("cursor", 0)) % len(lista)
-    rota, periodo = lista[cursor]
-    log.info("unidade %d/%d: %s-%s %s/%s", cursor + 1, len(lista),
-             rota["origem"], rota["destino"], periodo["ano"], periodo["mes"])
-
     v = cfg["viagem"]
-    combos = combinacoes_datas(periodo, v, cfg["varredura"])
-    limite = int(cfg["varredura"]["max_consultas_por_run"])
-    if len(combos) > limite:
-        combos = random.sample(combos, limite)
 
     novas_linhas: list[dict] = []
     ofertas: list = []
-    for data_ida, data_volta, _dur in combos:
+    for busca in cfg["buscas"]:
+        log.info(
+            "consultando %s->%s ida %s / volta %s",
+            busca["origem"], busca["destino"], busca["data_ida"], busca["data_volta"],
+        )
         oferta = flights.buscar_mais_barata(
-            origem=rota["origem"],
-            destino=rota["destino"],
-            data_ida=data_ida,
-            data_volta=data_volta,
+            origem=busca["origem"],
+            destino=busca["destino"],
+            data_ida=busca["data_ida"],
+            data_volta=busca["data_volta"],
             adultos=v["passageiros_adultos"],
             criancas=v["passageiros_criancas"],
             classe=v["classe"],
@@ -95,35 +62,36 @@ def main() -> None:
         time.sleep(float(cfg["varredura"]["pausa_entre_consultas_seg"]) + random.random())
 
     registrar(novas_linhas)
-    log.info("%d consultas, %d ofertas coletadas", len(combos), len(ofertas))
+    log.info("%d busca(s), %d oferta(s) coletada(s)", len(cfg["buscas"]), len(ofertas))
 
     if not ofertas:
         _talvez_avisar_fonte_quebrada(estado)
     else:
         estado.pop("fonte_sem_dados_desde", None)
 
-    _avaliar_alertas(cfg, estado, historico + novas_linhas, ofertas, taxas)
-
-    estado["cursor"] = (cursor + 1) % len(lista)
+    _avaliar_alertas(cfg, estado, historico + novas_linhas, ofertas)
     salvar_estado(estado)
 
 
-def _avaliar_alertas(cfg, estado, historico, ofertas, taxas) -> None:
+def _avaliar_alertas(cfg, estado, historico, ofertas) -> None:
     alvo = float(cfg["precos"]["alvo_por_pessoa_brl"])
     queda = float(cfg["precos"]["queda_percentual"])
     dias_min_hist = float(cfg["precos"]["dias_minimos_historico"])
     janela = int(cfg["precos"]["media_movel_dias"])
     ultimo_alerta = estado["ultimo_alerta"]
     hist_dias = analysis.dias_de_historico(historico)
+    sugestoes = {(b["origem"], b["destino"]): b for b in cfg["buscas"]}
 
     for oferta in sorted(ofertas, key=lambda o: o.preco_por_pessoa_brl):
+        sugestao = sugestoes.get((oferta.origem, oferta.destino))
+
         # (a) alerta de alvo
         if oferta.preco_por_pessoa_brl < alvo and analysis.deve_alertar(oferta, "ALVO", ultimo_alerta):
-            notify.telegram(_texto_alerta("ALVO ATINGIDO", oferta, alvo, None))
+            notify.telegram(_texto_alerta("ALVO ATINGIDO", oferta, alvo, None, sugestao))
             notify.email(
                 f"[Passagens] ALVO: {oferta.origem}-{oferta.destino} R$ "
                 f"{oferta.preco_por_pessoa_brl:,.0f}/pessoa",
-                _html_alerta("ALVO ATINGIDO", oferta, alvo, None),
+                _html_alerta("ALVO ATINGIDO", oferta, alvo, None, sugestao),
                 cfg["email"],
             )
             analysis.marcar_alerta(oferta, "ALVO", ultimo_alerta, agora_utc())
@@ -136,17 +104,17 @@ def _avaliar_alertas(cfg, estado, historico, ofertas, taxas) -> None:
             )
             if media and n >= 5 and oferta.preco_por_pessoa_brl <= media * (1 - queda):
                 if analysis.deve_alertar(oferta, "QUEDA", ultimo_alerta):
-                    notify.telegram(_texto_alerta("QUEDA DE PRECO", oferta, alvo, media))
+                    notify.telegram(_texto_alerta("QUEDA DE PRECO", oferta, alvo, media, sugestao))
                     notify.email(
                         f"[Passagens] QUEDA: {oferta.origem}-{oferta.destino} "
                         f"-{(1 - oferta.preco_por_pessoa_brl / media) * 100:.0f}%",
-                        _html_alerta("QUEDA DE PRECO", oferta, alvo, media),
+                        _html_alerta("QUEDA DE PRECO", oferta, alvo, media, sugestao),
                         cfg["email"],
                     )
                     analysis.marcar_alerta(oferta, "QUEDA", ultimo_alerta, agora_utc())
 
 
-def _texto_alerta(titulo, oferta, alvo, media) -> str:
+def _texto_alerta(titulo, oferta, alvo, media, sugestao=None) -> str:
     link = flights.link_google_flights(
         oferta.origem, oferta.destino, oferta.data_ida, oferta.data_volta
     )
@@ -166,13 +134,16 @@ def _texto_alerta(titulo, oferta, alvo, media) -> str:
         )
     if oferta.rotulo_google:
         linhas.append(f"Google Flights: preco {oferta.rotulo_google}")
+    if sugestao:
+        linhas.append(f"Voo de ida sugerido: {sugestao.get('horario_ida_sugerido', '')}")
+        linhas.append(f"Voo de volta sugerido: {sugestao.get('horario_volta_sugerido', '')}")
     linhas.append(f'\n<a href="{link}">Abrir no Google Flights</a>')
-    linhas.append("\n⚠ Confirme preco, bagagem despachada e disponibilidade de 6 assentos no site antes de comprar.")
+    linhas.append("\n⚠ Confirme preco, bagagem despachada, horario e disponibilidade de 6 assentos no site antes de comprar.")
     return "\n".join(linhas)
 
 
-def _html_alerta(titulo, oferta, alvo, media) -> str:
-    return "<pre>" + _texto_alerta(titulo, oferta, alvo, media).replace("<b>", "").replace(
+def _html_alerta(titulo, oferta, alvo, media, sugestao=None) -> str:
+    return "<pre>" + _texto_alerta(titulo, oferta, alvo, media, sugestao).replace("<b>", "").replace(
         "</b>", ""
     ).replace("<a href=\"", "").replace("\">Abrir no Google Flights</a>", "") + "</pre>"
 

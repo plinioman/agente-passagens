@@ -3,51 +3,40 @@
 # Tudo aqui e publico (nao ha segredos). Segredos ficam em GitHub Secrets:
 #   TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, SMTP_PASSWORD
 # ---------------------------------------------------------------------------
+#
+# Foco atual: trecho domestico de CONEXAO Belo Horizonte <-> Rio de Janeiro
+# (GIG), para encaixar com o voo internacional GIG-JFK-GIG ja comprado.
+#   Ida:   28/04/2027 — pousar em GIG com folga antes do voo intl (parte 21:55)
+#   Volta: 11/05/2027 — sair de GIG umas 3-4h depois do pouso do intl (09:55)
+# Datas fixas (nao ha flexibilidade aqui, precisam encaixar no voo ja comprado).
 
-# Rotas monitoradas: origem fixa CNF, varios destinos aceitos
-rotas:
+buscas:
   - origem: CNF
-    destino: JFK
-  - origem: CNF
-    destino: EWR
-  - origem: CNF
-    destino: LGA
-  - origem: CNF
-    destino: YYZ
-
-# Janelas de viagem (datas totalmente flexiveis dentro de cada mes)
-periodos:
-  - { ano: 2027, mes: 3 }   # marco
-  - { ano: 2027, mes: 4 }   # abril
-  - { ano: 2027, mes: 5 }   # maio
-  - { ano: 2027, mes: 6 }   # junho
-  - { ano: 2027, mes: 9 }   # setembro
+    destino: GIG
+    data_ida: "2027-04-28"
+    data_volta: "2027-05-11"
+    # So informativo (a busca nao filtra por horario, o preco observado tem
+    # sido igual em todos os horarios do dia); use para escolher o voo certo
+    # na hora de comprar:
+    horario_ida_sugerido: "~13:00 (pousa 14:05, ~7h50 de folga antes do voo intl)"
+    horario_volta_sugerido: "~14:45 (sai ~4h50 depois do pouso do voo intl)"
 
 viagem:
-  dias_min: 8
-  dias_max: 12
   passageiros_adultos: 3
   passageiros_criancas: 3
   classe: economy
-  max_paradas: 2
+  max_paradas: 1   # hoje so ha voo direto (Azul) nesse trecho
 
 precos:
-  # Alvo por pessoa (o usuario confirmou: preco de adulto e crianca nao variam)
-  alvo_por_pessoa_brl: 4000
+  # Alvo por pessoa
+  alvo_por_pessoa_brl: 500
   # Alerta por queda percentual em relacao a media movel observada
-  queda_percentual: 0.18
-  # So dispara alerta de queda depois de acumular este tanto de historico
+  # (so passa a valer depois que acumular "dias_minimos_historico" de dados)
+  queda_percentual: 0.15
   dias_minimos_historico: 7
-  # Janela da media movel
   media_movel_dias: 45
 
-# Estrategia de varredura rotativa: cada execucao horaria cobre 1 "unidade"
-# (uma rota x um periodo). Com 4 rotas x 5 periodos = 20 unidades, o ciclo
-# completo leva ~20 horas. Isso mantem cada execucao leve e gentil com a fonte.
 varredura:
-  passo_dias_ida: 6          # amostra datas de ida a cada N dias dentro do mes
-  amostras_volta: 2         # quantas duracoes testar entre dias_min e dias_max
-  max_consultas_por_run: 8  # cada consulta abre um navegador (Playwright): ~15-30s
   pausa_entre_consultas_seg: 2
 
 relatorio:

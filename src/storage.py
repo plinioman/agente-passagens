@@ -56,10 +56,9 @@ def ler_historico() -> list[dict]:
 def carregar_estado() -> dict:
     caminho = Path(CAMINHO_ESTADO)
     if not caminho.exists():
-        return {"cursor": 0, "ultimo_alerta": {}, "snapshot_relatorio": None}
+        return {"ultimo_alerta": {}, "snapshot_relatorio": None}
     with open(caminho, "r", encoding="utf-8") as fh:
         estado = json.load(fh)
-    estado.setdefault("cursor", 0)
     estado.setdefault("ultimo_alerta", {})
     estado.setdefault("snapshot_relatorio", None)
     return estado
