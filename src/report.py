@@ -92,6 +92,7 @@ def main() -> None:
     linhas.extend(_cabecalho_criterios(cfg))
     linhas.append(f"• Historico acumulado: {hist_dias:.1f} dias")
     linhas.append("")
+    linhas.append("<b>Resultado:</b>")
     if not top:
         linhas.append("Nenhuma oferta coletada nas ultimas 24h.")
     novo_snap: dict[str, float] = {}
@@ -113,10 +114,19 @@ def main() -> None:
             f"   {l['paradas']} parada(s), {l['companhia']}{parte_media}{delta}"
         )
 
+    linhas.append("")
+    linhas.append(
+        "<i>Fonte: Google Flights (via fast-flights, fetch_mode=local/Playwright) — "
+        "confirme preco, horario e bagagem no site da companhia antes de comprar.</i>"
+    )
+
     texto = "\n".join(linhas)
     notify.telegram(texto)
+    texto_email = texto
+    for tag in ("<b>", "</b>", "<i>", "</i>"):
+        texto_email = texto_email.replace(tag, "")
     notify.email(f"[Passagens] Relatorio {datetime.now(timezone.utc):%d/%m %H:%MZ}",
-                 "<pre>" + texto.replace("<b>", "").replace("</b>", "") + "</pre>", cfg["email"])
+                 "<pre>" + texto_email + "</pre>", cfg["email"])
 
     estado["snapshot_relatorio"] = {"em": agora_utc(), "itens": novo_snap}
     salvar_estado(estado)
