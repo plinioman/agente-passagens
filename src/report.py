@@ -32,6 +32,37 @@ def melhores_por_rota_data(historico: list[dict], desde_horas: int = 24) -> list
     return sorted(melhor.values(), key=lambda l: float(l["preco_por_pessoa_brl"]))
 
 
+def _data_br(iso: str) -> str:
+    from datetime import date
+
+    return date.fromisoformat(iso).strftime("%d/%m/%Y")
+
+
+def _cabecalho_criterios(cfg: dict) -> list[str]:
+    from datetime import date as _date
+
+    v = cfg["viagem"]
+    p = cfg["precos"]
+    linhas = ["<b>Criterios considerados:</b>"]
+    for b in cfg["buscas"]:
+        dias = (_date.fromisoformat(b["data_volta"]) - _date.fromisoformat(b["data_ida"])).days
+        linhas.append(
+            f"• Rota: {b['origem']} → {b['destino']} | "
+            f"{_data_br(b['data_ida'])} (ida) → {_data_br(b['data_volta'])} (volta) — {dias} dias"
+        )
+    linhas.append(
+        f"• Passageiros: {v['passageiros_adultos']} adultos + {v['passageiros_criancas']} "
+        f"criancas ({v['passageiros_adultos'] + v['passageiros_criancas']} total) | "
+        f"Classe: {v['classe']} | Paradas: ate {v['max_paradas']}"
+    )
+    linhas.append(
+        f"• Alvo: R$ {p['alvo_por_pessoa_brl']:,.0f}/pessoa | "
+        f"Alerta de queda: {p['queda_percentual'] * 100:.0f}% vs. media "
+        f"(min. {p['dias_minimos_historico']:.0f} dias de historico)"
+    )
+    return linhas
+
+
 def main() -> None:
     cfg = carregar()
     estado = carregar_estado()
@@ -48,14 +79,19 @@ def main() -> None:
 
     top = melhores_por_rota_data(historico_ativo)[:top_n]
     if not historico_ativo:
-        notify.telegram("📊 Relatorio: ainda sem dados coletados. Aguarde as primeiras varreduras.")
+        aviso = ["<b>📊 Relatorio de passagens</b> — ainda sem dados coletados", ""]
+        aviso.extend(_cabecalho_criterios(cfg))
+        aviso.append("\nAguarde as primeiras varreduras.")
+        notify.telegram("\n".join(aviso))
         return
 
     snap_ant = (estado.get("snapshot_relatorio") or {}).get("itens", {})
     hist_dias = analysis.dias_de_historico(historico)
 
-    linhas = [f"<b>📊 Relatorio de passagens</b> — {agora_utc()}",
-              f"Alvo: R$ {alvo:,.0f}/pessoa | historico: {hist_dias:.1f} dias", ""]
+    linhas = [f"<b>📊 Relatorio de passagens</b> — {agora_utc()}", ""]
+    linhas.extend(_cabecalho_criterios(cfg))
+    linhas.append(f"• Historico acumulado: {hist_dias:.1f} dias")
+    linhas.append("")
     if not top:
         linhas.append("Nenhuma oferta coletada nas ultimas 24h.")
     novo_snap: dict[str, float] = {}
