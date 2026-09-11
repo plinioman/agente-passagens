@@ -40,8 +40,14 @@ def main() -> None:
     alvo = float(cfg["precos"]["alvo_por_pessoa_brl"])
     janela = int(cfg["precos"]["media_movel_dias"])
 
-    top = melhores_por_rota_data(historico)[:top_n]
-    if not historico:
+    # So reporta rotas que estao atualmente configuradas em "buscas" (o
+    # historico pode conter rotas antigas, ja descontinuadas, que nao devem
+    # mais aparecer no relatorio).
+    rotas_ativas = {(b["origem"], b["destino"]) for b in cfg["buscas"]}
+    historico_ativo = [l for l in historico if (l["origem"], l["destino"]) in rotas_ativas]
+
+    top = melhores_por_rota_data(historico_ativo)[:top_n]
+    if not historico_ativo:
         notify.telegram("📊 Relatorio: ainda sem dados coletados. Aguarde as primeiras varreduras.")
         return
 
