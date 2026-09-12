@@ -63,3 +63,4 @@ timestamp_utc,origem,destino,data_ida,data_volta,dias,preco_total_brl,preco_por_
 2026-09-12T12:46:45Z,CNF,GIG,2027-04-28,2027-05-11,13,4136.4,689.4,USD,0,Azul,typical
 2026-09-12T16:08:31Z,CNF,GIG,2027-04-28,2027-05-11,13,4136.4,689.4,USD,0,Azul,typical
 2026-09-12T19:05:50Z,CNF,GIG,2027-04-28,2027-05-11,13,4136.4,689.4,USD,0,Azul,typical
+2026-09-12T21:24:11Z,CNF,GIG,2027-04-28,2027-05-11,13,4104.0,684.0,USD,0,Azul,typical
