@@ -1,6 +1,11 @@
 {
   "cursor": 7,
-  "ultimo_alerta": {},
+  "ultimo_alerta": {
+    "ALVO:CNF-GIG|2027-04-28|2027-05-11": {
+      "ts": "2026-09-16T00:05:11Z",
+      "preco_pp": 474.3
+    }
+  },
   "snapshot_relatorio": {
     "em": "2026-09-15T21:02:13Z",
     "itens": {
